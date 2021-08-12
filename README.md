@@ -7,9 +7,9 @@ An implementation of the Web Bluetooth API to detect the battery level notificat
 1. You need to have a running apache server with the project files in it (You can use XAMPP)
 2. You need to have a localhost MySQL database named 'battery_level_detector' with a table named 'data'
 3. In the data table, you need to have three columns as follows:
-  - id: autoincremented
-  - data: VARCHAR
-  - timestamp: TIMESTAMP
+  1. id: autoincremented
+  2. data: VARCHAR
+  3. timestamp: TIMESTAMP
 4. You need to download the BLE Peripheral Simulator on your Android Device and Open the Bluetooth
 5. You should open the battery level service to start advertising
 6. Open the web application on and only on chrome browser and have fun!
