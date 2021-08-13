@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <title>Battery Level BLE Detector</title>
+    <script src="js/jquery-3.6.0.min.js"></script>
+  </head>
+  <body>
+    <button onclick="onReadBatteryLevelButtonClick()">Read Battery Level</button>
+    <button onclick="onStartNotificationsButtonClick()">Start Reading</button>
+    <button onclick="onStopNotificationsButtonClick()">Stop Reading</button>
+    <button onclick="getPreviousReadings()">Get Previous Readings</button>
+
+    <div id="data" class="data"></div>
+  </body>
+</html>
+
+<script>
+  var bluetoothDevice;
+  var batteryLevelCharacteristic;
+  const dataDiv = document.getElementById('data');
+
+  function createPElement(text) {
+    var para = document.createElement('p');
+    para.innerHTML = text;
+    return para;
+  }
+
+  function onReadBatteryLevelButtonClick() {
+    return (bluetoothDevice ? Promise.resolve() : requestDevice())
+    .then(connectDeviceAndCacheCharacteristics)
+    .then(_ => {
+      console.log('Reading Battery Level...');
+      dataDiv.appendChild(createPElement('Reading Battery Level...'));
+      return batteryLevelCharacteristic.readValue();
+    })
+    .catch(error => {
+      console.log('Argh! ' + error);
+    });
+  }
+
+  function requestDevice() {
+    console.log('Requesting any Bluetooth Device...');
+    dataDiv.appendChild(createPElement('Requesting any Bluetooth Device...'));
+    return navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['battery_service']})
+    .then(device => {
+      bluetoothDevice = device;
+      bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+    });
+  }
+
+  function connectDeviceAndCacheCharacteristics() {
+    if (bluetoothDevice.gatt.connected && batteryLevelCharacteristic) {
+      return Promise.resolve();
+    }
+
+    console.log('Connecting to GATT Server...');
+    dataDiv.appendChild(createPElement('Connecting to GATT Server...'));
+    return bluetoothDevice.gatt.connect()
+    .then(server => {
+      console.log('Getting Battery Service...');
+      dataDiv.appendChild(createPElement('Getting Battery Service...'));
+      return server.getPrimaryService('battery_service');
+    })
+    .then(service => {
+      console.log('Getting Battery Level Characteristic...');
+      dataDiv.appendChild(createPElement('Getting Battery Level Characteristic...'));
+      return service.getCharacteristic('battery_level');
+    })
+    .then(characteristic => {
+      batteryLevelCharacteristic = characteristic;
+      batteryLevelCharacteristic.addEventListener('characteristicvaluechanged',
+          handleBatteryLevelChanged);
+    });
+  }
+
+  function handleBatteryLevelChanged(event) {
+    let batteryLevel = event.target.value.getUint8(0);
+    $.post("php/save-data.php",
+    {
+      data: batteryLevel
+    });
+    console.log('> Battery Level is ' + batteryLevel + '%');
+    dataDiv.appendChild(createPElement(`> Battery Level is ${batteryLevel}%`));
+  }
+
+  function onStartNotificationsButtonClick() {
+    console.log('Starting Battery Level Notifications...');
+    dataDiv.appendChild(createPElement('Starting Battery Level Notifications...'));
+    batteryLevelCharacteristic.startNotifications()
+    .then(_ => {
+      console.log('> Notifications started');
+      dataDiv.appendChild(createPElement('> Notifications started'));
+    })
+    .catch(error => {
+      console.log('Argh! ' + error);
+    });
+  }
+
+  function onStopNotificationsButtonClick() {
+    console.log('Stopping Battery Level Notifications...');
+    dataDiv.appendChild(createPElement('Stopping Battery Level Notifications...'));
+    batteryLevelCharacteristic.stopNotifications()
+    .then(_ => {
+      console.log('> Notifications stopped');
+      dataDiv.appendChild(createPElement('> Notifications stopped'));
+    })
+    .catch(error => {
+      console.log('Argh! ' + error);
+    });
+  }
+
+  function onResetButtonClick() {
+    if (batteryLevelCharacteristic) {
+      batteryLevelCharacteristic.removeEventListener('characteristicvaluechanged',
+          handleBatteryLevelChanged);
+      batteryLevelCharacteristic = null;
+    }
+    bluetoothDevice = null;
+    console.log('> Bluetooth Device reset');
+    dataDiv.appendChild(createPElement('> Bluetooth Device reset'));
+  }
+
+  function onDisconnected() {
+    console.log('> Bluetooth Device disconnected');
+    dataDiv.appendChild(createPElement('> Bluetooth Device disconnected'));
+    connectDeviceAndCacheCharacteristics()
+    .catch(error => {
+      console.log('Argh! ' + error);
+    });
+  }
+
+  function getPreviousReadings() {
+    $.get("php/get-data.php", function(data, status){
+      data = JSON.parse(data);
+      for (var i = 0; i < data.length; i++) {
+        var para = document.createElement('p');
+        para.innerHTML += '[' + data[i]['timestamp'] + ']' + ': Battery Level > ' + data[i]['data'] + '%';
+        dataDiv.appendChild(para);
+      }
+    });
+  }
+
+</script>
